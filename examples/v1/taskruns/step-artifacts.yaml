@@ -12,7 +12,7 @@ spec:
         script: |
           cat > $(step.artifacts.path) << EOF
           {
-            "inputs":[
+            "inputs":[{
               "name": "input-artifacts",
               "values": [
                 {
@@ -20,8 +20,8 @@ spec:
                   "digest": "sha256:33333"
                 },
               ]
-            ],
-            "outputs": [
+          }],
+          "outputs":[{
               "name": "build-result", 
               "values": [
                 {
@@ -29,6 +29,6 @@ spec:
                   "digest": "sha256:a1ebe34234212312321"
                 },
               ]
-            ]
+          }]
           }
           EOF

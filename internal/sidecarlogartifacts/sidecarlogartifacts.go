@@ -92,19 +92,19 @@ type SidecarArtifacts map[string]v1.Artifacts
 
 func GetArtifactsFromSidecarLogs(ctx context.Context, clientset kubernetes.Interface, namespace string, name string, container string, podPhase corev1.PodPhase) (SidecarArtifacts, error) {
 	sidecarArtifacts := SidecarArtifacts{}
-	if podPhase == corev1.PodPending {
-		return sidecarArtifacts, nil
-	}
-	podLogOpts := corev1.PodLogOptions{Container: container}
-	req := clientset.CoreV1().Pods(namespace).GetLogs(name, &podLogOpts)
-	stream, err := req.Stream(ctx)
-	if err != nil {
-		return sidecarArtifacts, err
-	}
-	err = json.NewDecoder(stream).Decode(&sidecarArtifacts)
-	if err != nil {
-		return sidecarArtifacts, err
-	}
+	//if podPhase == corev1.PodPending {
+	//	return sidecarArtifacts, nil
+	//}
+	//podLogOpts := corev1.PodLogOptions{Container: container}
+	//req := clientset.CoreV1().Pods(namespace).GetLogs(name, &podLogOpts)
+	//stream, err := req.Stream(ctx)
+	//if err != nil {
+	//	return sidecarArtifacts, err
+	//}
+	//err = json.NewDecoder(stream).Decode(&sidecarArtifacts)
+	//if err != nil {
+	//	return sidecarArtifacts, err
+	//}
 
 	return sidecarArtifacts, nil
 }
@@ -117,15 +117,20 @@ func LookForArtifacts(names []string, runDir string) (SidecarArtifacts, error) {
 	artifacts := SidecarArtifacts{}
 	for _, name := range names {
 		p := filepath.Join(pipeline.StepsDir, name, "artifacts", "provenance.json")
+		if true {
+			log.Fatal(p)
+		}
 		if _, err := fileExists(p); err != nil {
 			return artifacts, err
 		}
 		subRes, err := extractArtifactsFromFile(p)
+		log.Println(subRes)
 		if err != nil {
 			return artifacts, err
 		}
 		artifacts[name] = v1.Artifacts{Inputs: subRes.Inputs, Outputs: subRes.Outputs}
 
 	}
+	fmt.Println(artifacts)
 	return artifacts, nil
 }
