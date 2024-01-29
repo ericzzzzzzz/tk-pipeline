@@ -1,1 +1,1 @@
-defaultBaseImage: ubuntu
+defaultBaseImage: gcr.io/buildpacks/builder:v1

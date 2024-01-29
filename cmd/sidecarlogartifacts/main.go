@@ -19,12 +19,11 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"github.com/tektoncd/pipeline/internal/sidecarlogartifacts"
+	"github.com/tektoncd/pipeline/pkg/pod"
 	"log"
+	"os"
 	"strings"
-
-	"github.com/tektoncd/pipeline/pkg/apis/pipeline"
 )
 
 func main() {
@@ -35,13 +34,13 @@ func main() {
 		log.Fatal("step-names were not provided")
 	}
 	names := strings.Split(stepNames, ",")
-	artifacts, err := sidecarlogartifacts.LookForArtifacts(names, pipeline.StepsDir)
+	artifacts, err := sidecarlogartifacts.LookForArtifacts(names, pod.RunDir)
 	if err != nil {
 		log.Fatal(err)
 	}
-	marshal, err := json.Marshal(artifacts)
+	err = json.NewEncoder(os.Stdout).Encode(artifacts)
+
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(string(marshal))
 }

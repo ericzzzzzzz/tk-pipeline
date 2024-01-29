@@ -12,23 +12,27 @@ spec:
         script: |
           cat > $(step.artifacts.path) << EOF
           {
-            "inputs":[{
-              "name": "input-artifacts",
-              "values": [
-                {
-                  "uri": "git:jjjsss",
-                  "digest": "sha256:33333"
-                },
-              ]
-          }],
-          "outputs":[{
-              "name": "build-result", 
-              "values": [
-                {
-                  "uri": "pkg:balba",
-                  "digest": "sha256:a1ebe34234212312321"
-                },
-              ]
-          }]
+            "inputs": [
+              {
+                "name": "input-artifacts",
+                "values": [
+                  {
+                    "uri": "git:jjjsss",
+                    "digest": "sha256:33333"
+                  }
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "name": "build-result",
+                "values": [
+                  {
+                    "uri": "pkg:balba",
+                    "digest": "sha256:a1ebe34234212312321"
+                  }
+                ]
+              }
+            ]
           }
           EOF

@@ -238,7 +238,7 @@ func setTaskRunStatusBasedOnStepStatus(ctx context.Context, logger *zap.SugaredL
 	if tr.IsDone() {
 		trs.Results = append(trs.Results, taskResults...)
 	}
-	sidecarArtifacts, err := sidecarlogartifacts.GetArtifactsFromSidecarLogs(ctx, kubeclient, tr.Namespace, tr.Status.PodName, pipeline.ReservedResultsSidecarContainerName, podPhase)
+	sidecarArtifacts, err := sidecarlogartifacts.GetArtifactsFromSidecarLogs(ctx, kubeclient, tr.Namespace, tr.Status.PodName, pipeline.ReservedArtifactsSidecarContainerName, podPhase)
 	if err != nil {
 		return nil
 	}
