@@ -37,6 +37,9 @@ type Images struct {
 	// WorkingDirInitImage is the container image containing our working dir init binary.
 	WorkingDirInitImage string
 
+	// SidecarLogArtifactsImage is container image containing the binary that fetches artifacts from the steps and logs it to stdout.
+	SidecarLogArtifactsImage string
+
 	// NOTE: Make sure to add any new images to Validate below!
 }
 
@@ -52,6 +55,7 @@ func (i Images) Validate() error {
 		{i.ShellImage, "shell-image"},
 		{i.ShellImageWin, "shell-image-win"},
 		{i.WorkingDirInitImage, "workingdirinit-image"},
+		{i.SidecarLogArtifactsImage, "sidecarlogartifacts-image"},
 	} {
 		if f.v == "" {
 			unset = append(unset, f.name)

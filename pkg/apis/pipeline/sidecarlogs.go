@@ -21,7 +21,15 @@ const (
 	// when the results-from feature-flag is set to "sidecar-logs".
 	ReservedResultsSidecarName = "tekton-log-results"
 
+	// ReservedArtifactsSidecarName is the name of the artifacts sidecar that outputs the artifacts to stdout
+	// when the results-from feature-flag is set to "sidecar-logs".
+	ReservedArtifactsSidecarName = "tekton-log-artifacts"
+
 	// ReservedResultsSidecarContainerName is the name of the results sidecar container that is injected
 	// by the reconciler.
 	ReservedResultsSidecarContainerName = "sidecar-tekton-log-results"
+
+	// ReservedArtifactsSidecarContainerName is the name of the artifacts sidecar container that is injected
+	// by the reconciler.
+	ReservedArtifactsSidecarContainerName = "sidecar-tekton-log-artifacts"
 )

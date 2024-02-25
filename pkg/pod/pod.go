@@ -201,15 +201,26 @@ func (b *Builder) Build(ctx context.Context, taskRun *v1.TaskRun, taskSpec v1.Ta
 		tasklevel.ApplyTaskLevelComputeResources(steps, taskRun.Spec.ComputeResources)
 	}
 	windows := usesWindows(taskRun)
-	if sidecarLogsResultsEnabled && taskSpec.Results != nil {
-		// create a results sidecar
-		resultsSidecar, err := createResultsSidecar(taskSpec, b.Images.SidecarLogResultsImage, setSecurityContext, windows)
-		if err != nil {
-			return nil, err
+	shouldCreateArtifactsSidecar := artifactsPathReferenced(steps)
+	if sidecarLogsResultsEnabled {
+		if shouldCreateArtifactsSidecar {
+			artifactsSidecar, err := createArtifactsSidecar(taskSpec, b.Images.SidecarLogArtifactsImage, setSecurityContext, windows)
+			if err != nil {
+				return nil, err
+			}
+			taskSpec.Sidecars = append(taskSpec.Sidecars, artifactsSidecar)
 		}
-		taskSpec.Sidecars = append(taskSpec.Sidecars, resultsSidecar)
+		if taskSpec.Results != nil {
+			// create a results sidecar
+			resultsSidecar, err := createResultsSidecar(taskSpec, b.Images.SidecarLogResultsImage, setSecurityContext, windows)
+			if err != nil {
+				return nil, err
+			}
+			taskSpec.Sidecars = append(taskSpec.Sidecars, resultsSidecar)
+		}
 		commonExtraEntrypointArgs = append(commonExtraEntrypointArgs, "-result_from", config.ResultExtractionMethodSidecarLogs)
 	}
+
 	sidecars, err := v1.MergeSidecarsWithSpecs(taskSpec.Sidecars, taskRun.Spec.SidecarSpecs)
 	if err != nil {
 		return nil, err
@@ -339,25 +350,53 @@ func (b *Builder) Build(ctx context.Context, taskRun *v1.TaskRun, taskSpec v1.Ta
 		stepContainers[i].VolumeMounts = vms
 	}
 
-	if sidecarLogsResultsEnabled && taskSpec.Results != nil {
+	if sidecarLogsResultsEnabled {
 		// Mount implicit volumes onto sidecarContainers
 		// so that they can access /tekton/results and /tekton/run.
-		for i, s := range sidecarContainers {
-			for j := 0; j < len(stepContainers); j++ {
-				s.VolumeMounts = append(s.VolumeMounts, runMount(j, true))
-			}
-			requestedVolumeMounts := map[string]bool{}
-			for _, vm := range s.VolumeMounts {
-				requestedVolumeMounts[filepath.Clean(vm.MountPath)] = true
-			}
-			var toAdd []corev1.VolumeMount
-			for _, imp := range volumeMounts {
-				if !requestedVolumeMounts[filepath.Clean(imp.MountPath)] {
-					toAdd = append(toAdd, imp)
+		if taskSpec.Results != nil {
+			for i, s := range sidecarContainers {
+				if s.Name != pipeline.ReservedResultsSidecarName {
+					continue
 				}
+				for j := 0; j < len(stepContainers); j++ {
+					s.VolumeMounts = append(s.VolumeMounts, runMount(j, true))
+				}
+				requestedVolumeMounts := map[string]bool{}
+				for _, vm := range s.VolumeMounts {
+					requestedVolumeMounts[filepath.Clean(vm.MountPath)] = true
+				}
+				var toAdd []corev1.VolumeMount
+				for _, imp := range volumeMounts {
+					if !requestedVolumeMounts[filepath.Clean(imp.MountPath)] {
+						toAdd = append(toAdd, imp)
+					}
+				}
+				vms := append(s.VolumeMounts, toAdd...) //nolint:gocritic
+				sidecarContainers[i].VolumeMounts = vms
 			}
-			vms := append(s.VolumeMounts, toAdd...) //nolint:gocritic
-			sidecarContainers[i].VolumeMounts = vms
+		}
+		if shouldCreateArtifactsSidecar {
+			for i, s := range sidecarContainers {
+				if s.Name != pipeline.ReservedArtifactsSidecarName {
+					continue
+				}
+
+				for j := 0; j < len(stepContainers); j++ {
+					s.VolumeMounts = append(s.VolumeMounts, runMount(j, true))
+				}
+				requestedVolumeMounts := map[string]bool{}
+				for _, vm := range s.VolumeMounts {
+					requestedVolumeMounts[filepath.Clean(vm.MountPath)] = true
+				}
+				var toAdd []corev1.VolumeMount
+				for _, imp := range volumeMounts {
+					if !requestedVolumeMounts[filepath.Clean(imp.MountPath)] {
+						toAdd = append(toAdd, imp)
+					}
+				}
+				vms := append(s.VolumeMounts, toAdd...) //nolint:gocritic
+				sidecarContainers[i].VolumeMounts = vms
+			}
 		}
 	}
 
@@ -733,4 +772,59 @@ func usesWindows(tr *v1.TaskRun) bool {
 	}
 	osSelector := tr.Spec.PodTemplate.NodeSelector[osSelectorLabel]
 	return osSelector == "windows"
+}
+
+// createArtifactsSidecar creates a sidecar that will run the sidecarlogartifacts binary,
+// based on the spec of the Task, the image that should run in the artifacts sidecar,
+// whether it will run on a windows node, and whether the sidecar should include a security context
+// that will allow it to run in namespaces with "restricted" pod security admission.
+// It will also provide arguments to the binary that allow it to surface the step artifacts.
+func createArtifactsSidecar(taskSpec v1.TaskSpec, image string, setSecurityContext, windows bool) (v1.Sidecar, error) {
+	var stepNames []string
+
+	for i, s := range taskSpec.Steps {
+		stepName := StepName(s.Name, i)
+		stepNames = append(stepNames, stepName)
+	}
+
+	command := []string{"/ko-app/sidecarlogartifacts", "-step-names", strings.Join(stepNames, ",")}
+
+	sidecar := v1.Sidecar{
+		Name:    pipeline.ReservedArtifactsSidecarName,
+		Image:   image,
+		Command: command,
+	}
+	securityContext := linuxSecurityContext
+	if windows {
+		securityContext = windowsSecurityContext
+	}
+	if setSecurityContext {
+		sidecar.SecurityContext = securityContext
+	}
+	return sidecar, nil
+}
+
+func artifactsPathReferenced(steps []v1.Step) bool {
+	for i, step := range steps {
+		path := filepath.Join(pipeline.StepsDir, StepName(step.Name, i), "artifacts", "provenance.json")
+		if strings.Contains(step.Script, path) {
+			return true
+		}
+		for _, arg := range step.Args {
+			if strings.Contains(arg, path) {
+				return true
+			}
+		}
+		for _, c := range step.Command {
+			if strings.Contains(c, path) {
+				return true
+			}
+		}
+		for _, e := range step.Env {
+			if strings.Contains(e.Value, path) {
+				return true
+			}
+		}
+	}
+	return false
 }

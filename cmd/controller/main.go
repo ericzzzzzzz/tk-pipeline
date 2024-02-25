@@ -56,7 +56,7 @@ func main() {
 	flag.StringVar(&opts.Images.ShellImage, "shell-image", "", "The container image containing a shell")
 	flag.StringVar(&opts.Images.ShellImageWin, "shell-image-win", "", "The container image containing a windows shell")
 	flag.StringVar(&opts.Images.WorkingDirInitImage, "workingdirinit-image", "", "The container image containing our working dir init binary.")
-
+	flag.StringVar(&opts.Images.SidecarLogArtifactsImage, "sidecarlogartifacts-image", "", "The container image containing the binary for accessing artifacts.")
 	// This parses flags.
 	cfg := injection.ParseAndGetRESTConfigOrDie()
 

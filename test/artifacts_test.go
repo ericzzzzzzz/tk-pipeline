@@ -40,43 +40,57 @@ var (
 	}
 )
 
-func TestSurfaceArtifactsThroughTerminationMessage(t *testing.T) {
-	featureFlags := getFeatureFlagsBaseOnAPIFlag(t)
-	checkFlagsEnabled := requireAllGates(requireEnableStepArtifactsGate)
-
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	c, namespace := setup(ctx, t)
-	checkFlagsEnabled(ctx, t, c, "")
-	previous := featureFlags.ResultExtractionMethod
-	updateConfigMap(ctx, c.KubeClient, system.Namespace(), config.GetFeatureFlagsConfigName(), map[string]string{
-		"results-from": config.ResultExtractionMethodTerminationMessage,
-	})
-
-	knativetest.CleanupOnInterrupt(func() {
-		updateConfigMap(ctx, c.KubeClient, system.Namespace(), config.GetFeatureFlagsConfigName(), map[string]string{
-			"results-from": previous,
-		})
-		tearDown(ctx, t, c, namespace)
-	}, t.Logf)
-	defer func() {
-		updateConfigMap(ctx, c.KubeClient, system.Namespace(), config.GetFeatureFlagsConfigName(), map[string]string{
-			"results-from": previous,
-		})
-		tearDown(ctx, t, c, namespace)
-	}()
-
-	taskRunName := helpers.ObjectNameForTest(t)
-
-	fqImageName := getTestImage(busyboxImage)
-
-	t.Logf("Creating Task and TaskRun in namespace %s", namespace)
-	task := simpleArtifactProducerTask(t, namespace, fqImageName)
-	if _, err := c.V1TaskClient.Create(ctx, task, metav1.CreateOptions{}); err != nil {
-		t.Fatalf("Failed to create Task: %s", err)
+func TestSurfaceArtifacts(t *testing.T) {
+	tests := []struct {
+		desc                   string
+		resultExtractionMethod string
+	}{
+		{
+			desc:                   "surface artifacts through termination message",
+			resultExtractionMethod: config.ResultExtractionMethodTerminationMessage},
+		{
+			desc:                   "surface artifacts through sidecar logs",
+			resultExtractionMethod: config.ResultExtractionMethodSidecarLogs},
 	}
-	taskRun := parse.MustParseV1TaskRun(t, fmt.Sprintf(`
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			featureFlags := getFeatureFlagsBaseOnAPIFlag(t)
+			checkFlagsEnabled := requireAllGates(requireEnableStepArtifactsGate)
+
+			ctx := context.Background()
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			c, namespace := setup(ctx, t)
+			checkFlagsEnabled(ctx, t, c, "")
+			previous := featureFlags.ResultExtractionMethod
+			updateConfigMap(ctx, c.KubeClient, system.Namespace(), config.GetFeatureFlagsConfigName(), map[string]string{
+				"results-from": tc.resultExtractionMethod,
+			})
+
+			knativetest.CleanupOnInterrupt(func() {
+				updateConfigMap(ctx, c.KubeClient, system.Namespace(), config.GetFeatureFlagsConfigName(), map[string]string{
+					"results-from": previous,
+				})
+				tearDown(ctx, t, c, namespace)
+			}, t.Logf)
+			defer func() {
+				updateConfigMap(ctx, c.KubeClient, system.Namespace(), config.GetFeatureFlagsConfigName(), map[string]string{
+					"results-from": previous,
+				})
+				tearDown(ctx, t, c, namespace)
+			}()
+
+			taskRunName := helpers.ObjectNameForTest(t)
+
+			fqImageName := getTestImage(busyboxImage)
+
+			t.Logf("Creating Task and TaskRun in namespace %s", namespace)
+			task := simpleArtifactProducerTask(t, namespace, fqImageName)
+			if _, err := c.V1TaskClient.Create(ctx, task, metav1.CreateOptions{}); err != nil {
+				t.Fatalf("Failed to create Task: %s", err)
+			}
+			taskRun := parse.MustParseV1TaskRun(t, fmt.Sprintf(`
 metadata:
   name: %s
   namespace: %s
@@ -84,31 +98,33 @@ spec:
   taskRef:
     name: %s
 `, taskRunName, namespace, task.Name))
-	if _, err := c.V1TaskRunClient.Create(ctx, taskRun, metav1.CreateOptions{}); err != nil {
-		t.Fatalf("Failed to create TaskRun: %s", err)
-	}
+			if _, err := c.V1TaskRunClient.Create(ctx, taskRun, metav1.CreateOptions{}); err != nil {
+				t.Fatalf("Failed to create TaskRun: %s", err)
+			}
 
-	if err := WaitForTaskRunState(ctx, c, taskRunName, TaskRunSucceed(taskRunName), "TaskRunSucceed", v1Version); err != nil {
-		t.Errorf("Error waiting for TaskRun to finish: %s", err)
-	}
+			if err := WaitForTaskRunState(ctx, c, taskRunName, TaskRunSucceed(taskRunName), "TaskRunSucceed", v1Version); err != nil {
+				t.Errorf("Error waiting for TaskRun to finish: %s", err)
+			}
 
-	taskrun, err := c.V1TaskRunClient.Get(ctx, taskRunName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("Couldn't get expected TaskRun %s: %s", taskRunName, err)
-	}
-	if d := cmp.Diff([]v1.TaskRunStepArtifact{{Name: "input-artifacts",
-		Values: []v1.ArtifactValue{{Digest: map[v1.Algorithm]string{"sha256": "b35cacccfdb1e24dc497d15d553891345fd155713ffe647c281c583269eaaae0"},
-			Uri: "git:jjjsss",
-		}},
-	}}, taskrun.Status.Steps[0].Inputs); d != "" {
-		t.Fatalf(`The expected stepState Inputs does not match created taskrun stepState Inputs. Here is the diff: %v`, d)
-	}
-	if d := cmp.Diff([]v1.TaskRunStepArtifact{{Name: "build-result",
-		Values: []v1.ArtifactValue{{Digest: map[v1.Algorithm]string{"sha1": "95588b8f34c31eb7d62c92aaa4e6506639b06ef2", "sha256": "df85b9e3983fe2ce20ef76ad675ecf435cc99fc9350adc54fa230bae8c32ce48"},
-			Uri: "pkg:balba",
-		}},
-	}}, taskrun.Status.Steps[0].Outputs); d != "" {
-		t.Fatalf(`The expected stepState Outputs does not match created taskrun stepState Outputs. Here is the diff: %v`, d)
+			taskrun, err := c.V1TaskRunClient.Get(ctx, taskRunName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("Couldn't get expected TaskRun %s: %s", taskRunName, err)
+			}
+			if d := cmp.Diff([]v1.TaskRunStepArtifact{{Name: "source",
+				Values: []v1.ArtifactValue{{Digest: map[v1.Algorithm]string{"sha256": "b35cacccfdb1e24dc497d15d553891345fd155713ffe647c281c583269eaaae0"},
+					Uri: "git:jjjsss",
+				}},
+			}}, taskrun.Status.Steps[0].Inputs); d != "" {
+				t.Fatalf(`The expected stepState Inputs does not match created taskrun stepState Inputs. Here is the diff: %v`, d)
+			}
+			if d := cmp.Diff([]v1.TaskRunStepArtifact{{Name: "image",
+				Values: []v1.ArtifactValue{{Digest: map[v1.Algorithm]string{"sha1": "95588b8f34c31eb7d62c92aaa4e6506639b06ef2", "sha256": "df85b9e3983fe2ce20ef76ad675ecf435cc99fc9350adc54fa230bae8c32ce48"},
+					Uri: "pkg:balba",
+				}},
+			}}, taskrun.Status.Steps[0].Outputs); d != "" {
+				t.Fatalf(`The expected stepState Outputs does not match created taskrun stepState Outputs. Here is the diff: %v`, d)
+			}
+		})
 	}
 }
 
@@ -281,7 +297,7 @@ spec:
           {
             "inputs":[
               {
-                "name":"input-artifacts",
+                "name":"source",
                 "values":[
                   {
                     "uri":"git:jjjsss",
@@ -294,7 +310,7 @@ spec:
             ],
             "outputs":[
               {
-                "name":"build-result",
+                "name":"image",
                 "values":[
                   {
                     "uri":"pkg:balba",

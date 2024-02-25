@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+	"github.com/tektoncd/pipeline/internal/sidecarlogartifacts"
 	"github.com/tektoncd/pipeline/internal/sidecarlogresults"
 	"github.com/tektoncd/pipeline/pkg/apis/config"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline"
@@ -222,14 +223,28 @@ func setTaskRunStatusBasedOnStepStatus(ctx context.Context, logger *zap.SugaredL
 
 	// Extract results from sidecar logs
 	sidecarLogsResultsEnabled := config.FromContextOrDefaults(ctx).FeatureFlags.ResultExtractionMethod == config.ResultExtractionMethodSidecarLogs
+	// temporary solution to check if artifacts sidecar created in taskRun
+	artifactsSidecarCreated := artifactsPathReferenced(ts.Steps)
 	sidecarLogResults := []result.RunResult{}
-	if sidecarLogsResultsEnabled && tr.Status.TaskSpec.Results != nil {
+
+	sidecarArtifacts := map[string]v1.Artifacts{}
+
+	if sidecarLogsResultsEnabled {
 		// extraction of results from sidecar logs
-		slr, err := sidecarlogresults.GetResultsFromSidecarLogs(ctx, kubeclient, tr.Namespace, tr.Status.PodName, pipeline.ReservedResultsSidecarContainerName, podPhase)
-		if err != nil {
-			merr = multierror.Append(merr, err)
+		if tr.Status.TaskSpec.Results != nil {
+			slr, err := sidecarlogresults.GetResultsFromSidecarLogs(ctx, kubeclient, tr.Namespace, tr.Status.PodName, pipeline.ReservedResultsSidecarContainerName, podPhase)
+			if err != nil {
+				merr = multierror.Append(merr, err)
+			}
+			sidecarLogResults = append(sidecarLogResults, slr...)
 		}
-		sidecarLogResults = append(sidecarLogResults, slr...)
+		if artifactsSidecarCreated {
+			sa, err := sidecarlogartifacts.GetArtifactsFromSidecarLogs(ctx, kubeclient, tr.Namespace, tr.Status.PodName, pipeline.ReservedArtifactsSidecarContainerName, podPhase)
+			sidecarArtifacts = sa
+			if err != nil {
+				merr = multierror.Append(merr, err)
+			}
+		}
 	}
 	// Populate Task results from sidecar logs
 	taskResultsFromSidecarLogs := getTaskResultsFromSidecarLogs(sidecarLogResults)
@@ -270,10 +285,19 @@ func setTaskRunStatusBasedOnStepStatus(ctx context.Context, logger *zap.SugaredL
 			// Set TaskResults from StepResults
 			trs.Results = append(trs.Results, createTaskResultsFromStepResults(stepRunRes, neededStepResults)...)
 		}
+		var as v1.Artifacts
+
+		if v, ok := sidecarArtifacts[s.Name]; ok {
+			as.Inputs = v.Inputs
+			as.Outputs = v.Outputs
+		}
+
+		if err != nil {
+			merr = multierror.Append(merr, err)
+		}
 
 		// Parse termination messages
 		terminationReason := ""
-		var as v1.Artifacts
 		if state.Terminated != nil && len(state.Terminated.Message) != 0 {
 			msg := state.Terminated.Message
 

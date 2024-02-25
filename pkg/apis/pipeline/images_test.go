@@ -24,23 +24,25 @@ import (
 
 func TestValidate(t *testing.T) {
 	valid := pipeline.Images{
-		EntrypointImage:        "set",
-		SidecarLogResultsImage: "set",
-		NopImage:               "set",
-		ShellImage:             "set",
-		ShellImageWin:          "set",
-		WorkingDirInitImage:    "set",
+		EntrypointImage:          "set",
+		SidecarLogResultsImage:   "set",
+		SidecarLogArtifactsImage: "set",
+		NopImage:                 "set",
+		ShellImage:               "set",
+		ShellImageWin:            "set",
+		WorkingDirInitImage:      "set",
 	}
 	if err := valid.Validate(); err != nil {
 		t.Errorf("valid Images returned error: %v", err)
 	}
 
 	invalid := pipeline.Images{
-		EntrypointImage:        "set",
-		SidecarLogResultsImage: "set",
-		NopImage:               "set",
-		ShellImage:             "", // unset!
-		ShellImageWin:          "set",
+		EntrypointImage:          "set",
+		SidecarLogResultsImage:   "set",
+		SidecarLogArtifactsImage: "set",
+		NopImage:                 "set",
+		ShellImage:               "", // unset!
+		ShellImageWin:            "set",
 	}
 	wantErr := "found unset image flags: [shell-image workingdirinit-image]"
 	if err := invalid.Validate(); err == nil {
