@@ -405,13 +405,23 @@ func ApplyArtifacts(spec *v1.TaskSpec) *v1.TaskSpec {
 		stringReplacements := getStepArtifactReplacements(spec.Steps[i], i)
 		container.ApplyStepReplacements(&spec.Steps[i], stringReplacements, map[string][]string{})
 	}
-	return spec
+
+	stringReplacements := getTaskArtifactReplacements()
+	return ApplyReplacements(spec, stringReplacements, map[string][]string{}, map[string]map[string]string{})
 }
 
 func getStepArtifactReplacements(step v1.Step, idx int) map[string]string {
 	stringReplacements := map[string]string{}
 	stepName := pod.StepName(step.Name, idx)
 	stringReplacements["step.artifacts.path"] = filepath.Join(pipeline.StepsDir, stepName, "artifacts", "provenance.json")
+
+	return stringReplacements
+}
+
+func getTaskArtifactReplacements() map[string]string {
+	stringReplacements := map[string]string{}
+
+	stringReplacements["artifacts.path"] = filepath.Join(pipeline.DefaultArtifactPath, "provenance.json")
 
 	return stringReplacements
 }

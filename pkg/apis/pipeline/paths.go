@@ -30,4 +30,6 @@ const (
 	StepsDir = "/tekton/steps"
 
 	ScriptDir = "/tekton/scripts"
+
+	DefaultArtifactPath = "/tekton/artifacts"
 )

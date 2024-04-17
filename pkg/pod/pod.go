@@ -98,6 +98,9 @@ var (
 		Name:      "tekton-internal-steps",
 		MountPath: pipeline.StepsDir,
 		ReadOnly:  true,
+	}, {
+		Name:      "tekton-internal-artifacts",
+		MountPath: pipeline.DefaultArtifactPath,
 	}}
 	implicitVolumes = []corev1.Volume{{
 		Name:         "tekton-internal-workspace",
@@ -110,6 +113,9 @@ var (
 		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 	}, {
 		Name:         "tekton-internal-steps",
+		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+	}, {
+		Name:         "tekton-internal-artifacts",
 		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 	}}
 

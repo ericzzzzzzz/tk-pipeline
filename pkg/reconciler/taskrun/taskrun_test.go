@@ -332,6 +332,13 @@ var (
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	}
+
+	artifactsVolume = corev1.Volume{
+		Name: "tekton-internal-artifacts",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	}
 )
 
 const fakeVersion string = "unknown"
@@ -5883,6 +5890,11 @@ func podVolumeMounts(idx, totalSteps int) []corev1.VolumeMount {
 		MountPath: "/tekton/steps",
 		ReadOnly:  true,
 	})
+	mnts = append(mnts, corev1.VolumeMount{
+		Name:      "tekton-internal-artifacts",
+		MountPath: "/tekton/artifacts",
+		ReadOnly:  true,
+	})
 
 	return mnts
 }
@@ -5980,6 +5992,7 @@ func expectedPod(podName, taskName, taskRunName, ns, saName string, isClusterTas
 				stepsVolume,
 				binVolume,
 				downwardVolume,
+				artifactsVolume,
 			},
 			InitContainers:        []corev1.Container{placeToolsInitContainer(stepNames)},
 			RestartPolicy:         corev1.RestartPolicyNever,

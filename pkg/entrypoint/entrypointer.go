@@ -132,6 +132,9 @@ type Entrypointer struct {
 	ResultsDirectory string
 	// ResultExtractionMethod is the method using which the controller extracts the results from the task pod.
 	ResultExtractionMethod string
+
+	// ArtifactsDirectory is the directory to find artifacts, defaults to pipeline.DefaultArtifactPath
+	ArtifactsDirectory string
 }
 
 // Waiter encapsulates waiting for files to exist.
@@ -280,11 +283,22 @@ func (e Entrypointer) Go() error {
 	}
 
 	if e.ResultExtractionMethod == config.ResultExtractionMethodTerminationMessage {
+		// extract step artifacts
 		fp := filepath.Join(e.StepMetadataDir, "artifacts", "provenance.json")
-
 		artifacts, err := readArtifacts(fp)
 		if err != nil {
-			logger.Fatalf("Error while handling artifacts: %s", err)
+			logger.Fatalf("Error while handling step artifacts: %s", err)
+		}
+		output = append(output, artifacts...)
+
+		artifactPath := pipeline.DefaultResultPath
+		if e.ResultsDirectory != "" {
+			artifactPath = e.ResultsDirectory
+		}
+		fp = filepath.Join(artifactPath, "provenance.json")
+		artifacts, err = readArtifacts(fp)
+		if err != nil {
+			logger.Fatalf("Error while handling task artifacts: %s", err)
 		}
 		output = append(output, artifacts...)
 	}

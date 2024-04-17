@@ -2019,7 +2019,7 @@ func TestApplyParametersToWorkspaceBindings(t *testing.T) {
 	}
 }
 
-func TestArtifacts(t *testing.T) {
+func TestStepArtifacts(t *testing.T) {
 	ts := &v1.TaskSpec{
 		Steps: []v1.Step{{
 			Name:  "name1",
@@ -2035,6 +2035,28 @@ func TestArtifacts(t *testing.T) {
 	want := applyMutation(ts, func(spec *v1.TaskSpec) {
 		spec.Steps[0].Args[0] = "/tekton/steps/step-name1/artifacts/provenance.json"
 		spec.Steps[0].Script = "#!/usr/bin/env bash\n echo -n /tekton/steps/step-name1/artifacts/provenance.json"
+	})
+	got := resources.ApplyArtifacts(ts)
+	if d := cmp.Diff(want, got); d != "" {
+		t.Errorf("ApplyArtifacts() got diff %s", diff.PrintWantGot(d))
+	}
+}
+func TestTaskArtifacts(t *testing.T) {
+	ts := &v1.TaskSpec{
+		Steps: []v1.Step{{
+			Name:  "name1",
+			Image: "bash:latest",
+			Args: []string{
+				"$(artifacts.path)",
+			},
+			Script: "#!/usr/bin/env bash\n echo -n $(artifacts.path)",
+		},
+		},
+	}
+
+	want := applyMutation(ts, func(spec *v1.TaskSpec) {
+		spec.Steps[0].Args[0] = "/tekton/artifacts/provenance.json"
+		spec.Steps[0].Script = "#!/usr/bin/env bash\n echo -n /tekton/artifacts/provenance.json"
 	})
 	got := resources.ApplyArtifacts(ts)
 	if d := cmp.Diff(want, got); d != "" {
